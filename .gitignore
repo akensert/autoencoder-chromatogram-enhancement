@@ -65,7 +65,7 @@ package-lock.json
 geckodriver.log
 *.iml
 # datasets
-input/
+# input/
 model_weights/
 inactive/
 # Byte-compiled / optimized / DLL files
