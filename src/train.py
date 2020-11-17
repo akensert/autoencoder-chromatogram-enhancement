@@ -121,7 +121,7 @@ class CAE(tf.keras.Model):
         tf.TensorSpec([8192], tf.float32),
     ])
     def smooth(self, chromatogram):
-        x = x[tf.newaxis, :, tf.newaxis]
+        x = chromatogram[tf.newaxis, :, tf.newaxis]
         x = self.encoder(x, training=False)
         x = self.decoder(x, training=False)
         return tf.squeeze(x)
@@ -170,7 +170,15 @@ if __name__ == '__main__':
     )
 
     cae.compile(optimizer=tf.keras.optimizers.Adam(1e-3))
-    cae.fit(generator, epochs=4, verbose=1, callbacks=[callback])
+    # cae.fit(generator, epochs=4, verbose=1, callbacks=[callback])
+    #
+    # tf.saved_model.save(cae, export_dir='../output/model')
+    # print("model saved to '../output/'")
 
-    tf.saved_model.save(cae, export_dir='../output/model')
-    print("model saved to '../output/'")
+    #DEBUG
+    for _ in range(8):
+        cae.fit(generator, epochs=1, verbose=1)
+        cae.optimizer.lr = cae.optimizer.lr * 0.5
+
+        tf.saved_model.save(cae, export_dir='../output/model')
+        print("model saved to '../output/'")
