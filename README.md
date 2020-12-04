@@ -20,7 +20,4 @@ or `python train.py -GPU=True` if GPU is available.
 
 **(2) train.py.** Trains autoencoder on train data (chromatograms in `input/training/*`). Takes about 30 minutes with an RTX 2070 GPU.
 
-**(3) evaluate.py.** Evaluates autoencoder + the other algorithms on test\_white and test\_pink chromatograms (chromatograms in `input/test_white/*` and `input/test_pink/*` respectively). Takes about 10 hours to run. Reduce time by lowering the number of test examples; i.e. set --N=100 to evaluate on 100 test examples instead of the maximum 10000. Notice, the hyperparameter values of the denoising methods were obtained via the hyperparameter grid-search (see `hyperparameter_search.py`)
-
-### Notebooks
-Try out the jupyter notebooks to better understand (e.g. by visualizing) the different steps from above.
+**(3) evaluate.py.** Evaluates autoencoder + the other denoising methods on test\_white and test\_pink chromatograms (chromatograms in `input/test_white/` and `input/test_pink/` respectively). This step may take up to a few hours to run. Reduce time by lowering the number of test examples; i.e. set flag `--N=100` to evaluate on 100 test examples instead of the default/maximum of 10000. Notice, the hyperparameter values of the denoising methods were obtained via the hyperparameter grid-search (see `hyperparameter_search.py`)
