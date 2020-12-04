@@ -61,3 +61,12 @@ def polynomial_baseline_correction(x, order=3, n_iter=100):
         z = np.dot(vander, coeffs)
         base = np.minimum(base, z)
     return x - z
+
+def apply_interpolation(x, y, target_size):
+    '''
+    Resizes a chromatogram to a given size/resolution
+    '''
+    f = scipy.interpolate.interp1d(x, y)
+    xnew = np.linspace(x.min(), x.max(), target_size)
+    ynew = f(xnew)
+    return xnew, ynew

@@ -1,60 +1,47 @@
+import numpy as np
 import scipy.signal
 import functools
 import multiprocessing
 import tqdm
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import itertools
+
 import signal_processing
+import metrics
 
-def mean_relative_error(y, x):
-    return np.mean(np.absolute(y - x) / (1 + np.absolute(y)))
 
-def mean_absolute_error(y, x):
-    return np.mean(np.absolute(y - x))
+def peak_detection(x, y, t, peak_regions, method1, method2, filter_length=9, height=1, distance=30):
+    smooth = scipy.signal.savgol_filter
+    y_pred = method1(x)
+    if hasattr(method1, '__name__'):
+        der_pred = method2(x)
+    else:
+        der_pred = method2(y_pred)
 
-def mean_squared_error(y, x):
-    return np.mean(np.square(y - x))
+    idx = scipy.signal.find_peaks(
+        -smooth(der_pred[peak_regions], filter_length, 2),
+        height=height,
+        distance=distance)[0]
+    return y_pred, der_pred, idx
 
-def peak_signal_to_noise_ratio(y, x, maxval=250):
-    mse = np.mean(np.square(y-x))
-    return 20 * np.log10(maxval / np.sqrt(mse))
+def read_data(path):
+    x1, x2, y1, _ = np.load(path+'.npy')
+    loc, scale = np.load(path+'_prop'+'.npy')
+    t = np.linspace(0, 1, 8192)
+    return x1, x2, y1, t, loc, scale
 
-def signal_to_noise_ratio(y, x):
-    eps=1e-3
-    H = x[scipy.signal.find_peaks(y)[0]].mean()
-    idx = np.where(y < eps)[0]
-    h = x[idx].std()*4
-    return H/(h+eps)
+def extract_peak_regions(t, loc, scale, dev):
+    peak_regions=[]
+    for l, s in zip(loc, scale):
+        idx = np.where((t>l-dev*s) & (t<l+dev*s))[0]
+        peak_regions.extend(idx)
+    return list(set(peak_regions))
 
-def grid_search(f, x, y, g, parameters):
-    grid = itertools.product(*parameters)
-    best_error = float('inf')
-    for p in grid:
-        if g is not None:
-            x_ = g(x)
-            x_ = f(x_, *p)
+def deriv(x, n, w, m):
+    for i in range(n):
+        if i != 0:
+            x = np.gradient(scipy.signal.savgol_filter(x, w, 2))*10*m
         else:
-            x_ = f(x, *p)
-        mre = mean_relative_error(y, x_)
-        mae = mean_absolute_error(y, x_)
-        mse = mean_squared_error(y, x_)
-        psnr = peak_signal_to_noise_ratio(y, x_)
-        snr = signal_to_noise_ratio(y, x_)
-        if mae < best_error:
-            best_error = mae
-            best_mre   = mre
-            best_mae   = mae
-            best_mse   = mse
-            best_psnr  = psnr
-            best_snr   = snr
-            best_param = p
-            best_x_    = x_
-
-    return best_mre, best_mae, best_mse, best_psnr, best_snr, best_param
-
-
+            x = np.gradient(x)*10*m
+    return x
 
 if __name__ == '__main__':
     import argparse
@@ -64,102 +51,86 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--N', type=int, default=100)
+    parser.add_argument('--inpath', type=str, default='../output/model')
     parser.add_argument('--T', type=str, default='white')
 
     args = parser.parse_args()
 
-    cae = tf.saved_model.load('../output/model')
-
-    savgol_lengths = [
-        5, 13, 21, 29, 37, 45, 53, 61, 69, 77,
-        85, 93, 101, 109, 117, 125, 133, 141, 149, 157
-    ]
-    savgol_orders =  [2, 3, 4]
-    savgol_n_iters = [1, 2, 3]
-
-    gaussian_lengths = [
-        5, 13, 21, 29, 37, 45, 53, 61, 69, 77,
-        85, 93, 101, 109, 117, 125, 133, 141, 149, 157
-    ]
-    gaussian_sigmas =  [
-        1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30
-    ]
-    gaussian_n_iters = [1, 2, 3]
-
-    als_lam =     [1e6, 1e7, 1e8, 1e9]
-    als_p =       [1e-2, 1e-3, 1e-4]
-    als_n_iters = [1, 2, 3]
-
-    polynomial_orders =  [2, 6, 12, 24, 48]
-    polynomial_n_iters = [1, 2, 4, 8]
-
+    cae = tf.saved_model.load(args.inpath)
 
     def main(index):
 
-        x1, x2, y = np.load(f'../input/simulations/test_{args.T}/chromatogram_{index}.npy')
+        x1, x2, y, t, loc, scale = read_data(f'../input/simulations/test_{args.T}/chromatogram_{index}')
+        indices = extract_peak_regions(t, loc, scale, dev=2)
+        indices2 = extract_peak_regions(t, loc, scale, dev=3)
 
-        mre1, mae1, mse1, psnr1, snr1, param1 = grid_search(
-            f=signal_processing.savgol_filter,
-            x=x1,
-            y=y,
-            g=None,
-            parameters=(savgol_lengths, savgol_orders, savgol_n_iters)
-        )
-
-        mre2, mae2, mse2, psnr2, snr2, param2 = grid_search(
-            f=signal_processing.gaussian_filter,
-            x=x1,
-            y=y,
-            g=None,
-            parameters=(gaussian_lengths, gaussian_sigmas, gaussian_n_iters)
-        )
+        param = (45, 4, 3)
+        method1 = functools.partial(signal_processing.savgol_filter, length=param[0], order=param[1], n_iter=param[2])
+        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        y_pred, der_pred, idx = peak_detection(
+            x1, y, t, indices, method1=method1, method2=method2)
+        f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
+        # COMPUTE METRICS
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        metrics1 = (rmse, rmse_p, psnr, snr, f1_score)
 
         g = functools.partial(
             signal_processing.savgol_filter,
-            length=param1[0],
-            order=param1[1],
-            n_iter=param1[2]
-        )
+            length=param[0], order=param[1],n_iter=param[2])
 
-        mre3, mae3, mse3, psnr3, snr3, param3 = grid_search(
-            f=signal_processing.als_baseline_correction,
-            x=x2,
-            y=y,
-            g=g,
-            parameters=(als_lam, als_p, als_n_iters,)
-        )
+        param = (13, 8, 1)
+        method1 = functools.partial(signal_processing.gaussian_filter, length=param[0], sigma=param[1], n_iter=param[2])
+        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        y_pred, der_pred, idx = peak_detection(
+            x1, y, t, indices, method1=method1, method2=method2)
+        f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
+        # COMPUTE METRICS
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        metrics2 = (rmse, rmse_p, psnr, snr, f1_score)
 
-        mre4, mae4, mse4, psnr4, snr4, param4 = grid_search(
-            f=signal_processing.polynomial_baseline_correction,
-            x=x2,
-            y=y,
-            g=g,
-            parameters=(polynomial_orders, polynomial_n_iters)
-        )
+        param = (1000000000.0, 0.01, 3)
+        method1a = g
+        method1b = functools.partial(signal_processing.als_baseline_correction, lam=param[0], p=param[1], n_iter=param[2])
+        method1 = lambda x: method1a(method1b(x))
+        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        y_pred, der_pred, idx = peak_detection(
+            x2, y, t, indices, method1=method1, method2=method2)
+        f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
+        # COMPUTE METRICS
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        metrics3 = (rmse, rmse_p, psnr, snr, f1_score)
 
-        x_ = cae.smooth(x1.astype(np.float32))
-        mre5a = mean_relative_error(y, x_)
-        mae5a = mean_absolute_error(y, x_)
-        mse5a = mean_squared_error(y, x_)
-        psnr5a = peak_signal_to_noise_ratio(y, x_.numpy())
-        snr5a = signal_to_noise_ratio(y, x_.numpy())
+        param = (12, 8)
+        method1a = g
+        method1b = functools.partial(signal_processing.polynomial_baseline_correction, order=param[0], n_iter=param[1])
+        method1 = lambda x: method1a(method1b(x))
+        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        y_pred, der_pred, idx = peak_detection(
+            x2, y, t, indices, method1=method1, method2=method2)
+        f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
+        # COMPUTE METRICS
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        metrics4 = (rmse, rmse_p, psnr, snr, f1_score)
 
-        x_ = cae.smooth(x2.astype(np.float32))
-        mre5b = mean_relative_error(y, x_)
-        mae5b = mean_absolute_error(y, x_)
-        mse5b = mean_squared_error(y, x_)
-        psnr5b = peak_signal_to_noise_ratio(y, x_.numpy())
-        snr5b = signal_to_noise_ratio(y, x_.numpy())
+        method1 = lambda x: cae.smooth(x).numpy()
+        method2 = lambda x: cae.smooth_der(x).numpy()
+        y_pred, der_pred, idx = peak_detection(
+            x1, y, t, indices, method1=method1, method2=method2)
+        f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
+        # COMPUTE METRICS
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        metrics5 = (rmse, rmse_p, psnr, snr, f1_score)
+
+        y_pred, der_pred, idx = peak_detection(
+            x2, y, t, indices, method1=method1, method2=method2)
+        f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
+        # COMPUTE METRICS
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        metrics6 = (rmse, rmse_p, psnr, snr, f1_score)
 
         return [
-            (mre1, mae1, mse1, psnr1, snr1),
-            (mre2, mae2, mse2, psnr2, snr2),
-            (mre3, mae3, mse3, psnr3, snr3),
-            (mre4, mae4, mse4, psnr4, snr4),
-            (mre5a, mae5a, mse5a, psnr5a, snr5a),
-            (mre5b, mae5b, mse5b, psnr5b, snr5b),
+            metrics1, metrics2, metrics5, metrics3, metrics4, metrics6,
         ]
-
 
 
 
@@ -175,6 +146,13 @@ if __name__ == '__main__':
         output.append(main(i))
 
     # save results
-    np.save(f'../output/results_{args.T}.npy', np.array(output))
-    print(f'results ({args.T} noise) =\n', np.array(output).mean(axis=0))
+    np.save(f'../output/results_{args.T}.npy', np.nan_to_num(np.array(output)))
+    print(f'results ({args.T} noise) =\n', np.nanmean(np.array(output), axis=0))
     print('\n')
+
+    with open('output.txt', 'a') as f:
+        f.write('\n\n')
+        for m in np.nanmean(np.array(output), axis=0):
+            for n in m:
+                f.write('{:.5f},'.format(n))
+            f.write('\n')

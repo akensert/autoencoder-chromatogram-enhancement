@@ -15,8 +15,11 @@
 *.jpg
 *.zip
 *.npy
-output/model
+output/[A-Za-z]*
 *.CSV
+notebooks/
+src/output.txt
+src/run.sh
 
 # jupyter
 MANIFEST

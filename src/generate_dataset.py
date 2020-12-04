@@ -2,60 +2,22 @@ import numpy as np
 import pandas as pd
 import multiprocessing
 import os
-from scipy.stats import exponnorm
 
-def apply_white_noise(x, A, snr, random_seed):
+import noise
+
+
+def compute_derivative(x, n):
     '''
-    Random sampling from a normal distribution to generate white noise.
+    Computes the n:th order derivative
+
+    The constant multiplied with each derivative is there to increase the
+    scale of the gradient for better training of the Autoencoder later on.
     '''
-    np.random.seed(random_seed)
-    stddev = A.mean() / snr / 4 # approximately noise levels that match snr
-    noise = np.random.normal(0, stddev, len(x))
-    return x + noise
-
-def apply_pink_noise(x, A, snr, num_sources, random_seed):
-    '''
-    Stochastic Voss-McCartney algorithm for generating pink noise.
-
-    References:
-        https://github.com/AllenDowney/ThinkDSP/blob/master/code/voss.ipynb
-        https://www.firstpr.com.au/dsp/pink-noise/
-    '''
-    np.random.seed(random_seed)
-    nrows = len(x)
-    ncols = num_sources
-
-    noise = np.full((nrows, ncols), np.nan)
-    noise[0, :] = np.random.random(ncols)
-    noise[:, 0] = np.random.random(nrows)
-
-    cols = np.random.geometric(0.5, nrows)
-    cols[cols >= ncols] = 0
-    rows = np.random.randint(nrows, size=nrows)
-    noise[rows, cols] = np.random.random(nrows)
-
-    noise = pd.DataFrame(noise)
-    noise.fillna(method='ffill', axis=0, inplace=True)
-    noise = noise.sum(axis=1).to_numpy()
-    noise = (noise - noise.mean())
-    noise = (A.mean()/snr) * noise / 2 # approximately noise levels that match snr
-    return noise + x
-
-def apply_drift(x, resolution, random_seed):
-    np.random.seed(random_seed)
-    def sigmoidal(y, m, w, b):
-        return 1 / (1 + np.exp( - (y * w + b) )) * m
-    y = np.linspace(-1, 1, 8192)
-    drift = np.zeros(resolution, dtype='float32')
-    n = 10
     for _ in range(n):
-        h = np.random.uniform(-500, 500)  # changed (-1000, 1000)
-        w = np.random.uniform(-20, 20)
-        b = np.random.uniform(-20, 20)
-        drift += sigmoidal(y, h, w, b) / n
-    return x + drift
+        x = np.gradient(x) * 10
+    return x
 
-def compute_gaussian_peak(x, A, loc, scale, asymmetry=None, epsilon=1e-7):
+def compute_gaussian_peak(x, A, loc, scale, asymmetry=None, eps=1e-7):
     '''
     Computes a normal Gaussian (asymmetry == None)
                or
@@ -63,7 +25,7 @@ def compute_gaussian_peak(x, A, loc, scale, asymmetry=None, epsilon=1e-7):
     '''
     if asymmetry is None:
         return A * np.exp((-(x - loc)**2) / (2 * scale**2))
-    return A * np.exp(-1/2 * ((x - loc)/(epsilon + scale + asymmetry * (x - loc)))**2)
+    return A * np.exp(-1/2*((x - loc)/(eps + scale + asymmetry * (x - loc)))**2)
 
 
 class Simulator:
@@ -76,7 +38,8 @@ class Simulator:
                  loc_range,
                  scale_range,
                  asymmetry_range,
-                 pink_noise_prob):
+                 pink_noise_prob,
+                 der_order):
 
         self.x = np.linspace(0, 1, resolution)
         self.resolution = resolution
@@ -87,6 +50,7 @@ class Simulator:
         self.scale_range = scale_range
         self.asymmetry_range = asymmetry_range
         self.pink_noise_prob = pink_noise_prob
+        self.der_order = der_order
 
     def run(self, random_seed):
 
@@ -107,19 +71,34 @@ class Simulator:
 
         self.snr = np.random.uniform(*self.snr_range)
 
-
         if self.pink_noise_prob > np.random.random():
-            chromatogram_noisy = apply_pink_noise(chromatogram, self.A, self.snr, 10, random_seed)
+            chromatogram_noisy = noise.apply_pink_noise(
+                chromatogram, self.A, self.snr, 6, random_seed)
         else:
-            chromatogram_noisy = apply_white_noise(chromatogram, self.A, self.snr, random_seed)
+            chromatogram_noisy = noise.apply_white_noise(
+                chromatogram, self.A, self.snr, random_seed)
 
-        chromatogram_noisy_drift = apply_drift(chromatogram_noisy, self.resolution, random_seed)
+        chromatogram_noisy_drift = noise.apply_drift(
+            chromatogram_noisy, self.resolution, random_seed)
 
-        return chromatogram_noisy, chromatogram_noisy_drift, chromatogram
+        return (
+            chromatogram_noisy,
+            chromatogram_noisy_drift,
+            chromatogram,
+            compute_derivative(chromatogram, self.der_order),
+            self.loc,
+            self.scale
+        )
 
 
 
 if __name__ == '__main__':
+
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--N', type=int, default=190_000)
+    parser.add_argument('--der_order', type=int, default=3)
+    args = parser.parse_args()
 
     simulator = Simulator(
         resolution=8192,
@@ -130,11 +109,13 @@ if __name__ == '__main__':
         scale_range=(0.001, 0.003),
         asymmetry_range=(-0.1, 0.1),
         pink_noise_prob=1.0,
+        der_order=args.der_order,
     )
 
     def save_example(path, random_seed):
-        x, y, z = simulator.run(random_seed)
-        np.save(path, np.stack([x, y, z]))
+        x1, x2, y, y_der, loc, scale = simulator.run(random_seed)
+        np.save(path, np.stack([x1, x2, y, y_der]))
+        np.save(path+'_prop', np.stack([loc, scale]))
 
     def generate(path, n, seed):
         if not(os.path.isdir(path)): os.makedirs(path)
@@ -144,15 +125,9 @@ if __name__ == '__main__':
                 save_example, zip(paths, range(seed, n+seed))): pass
 
 
-
     simulator.pink_noise_prob = 1
-
     generate('../input/simulations/test_pink', 10_000, 80_000)
-
     simulator.pink_noise_prob = 0
-
     generate('../input/simulations/test_white',  10_000, 80_000)
-
     simulator.pink_noise_prob = 0.5
-
-    generate('../input/simulations/train', 190_000, 90_000)
+    generate('../input/simulations/train', args.N, 90_000)
