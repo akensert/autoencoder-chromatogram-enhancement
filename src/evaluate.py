@@ -71,7 +71,7 @@ if __name__ == '__main__':
             x1, y, t, indices, method1=method1, method2=method2)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         # COMPUTE METRICS
-        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics1 = (rmse, rmse_p, psnr, snr, f1_score)
 
         g = functools.partial(
@@ -85,7 +85,7 @@ if __name__ == '__main__':
             x1, y, t, indices, method1=method1, method2=method2)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         # COMPUTE METRICS
-        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics2 = (rmse, rmse_p, psnr, snr, f1_score)
 
         param = (1000000000.0, 0.01, 3)
@@ -97,7 +97,7 @@ if __name__ == '__main__':
             x2, y, t, indices, method1=method1, method2=method2)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         # COMPUTE METRICS
-        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics3 = (rmse, rmse_p, psnr, snr, f1_score)
 
         param = (12, 8)
@@ -109,7 +109,7 @@ if __name__ == '__main__':
             x2, y, t, indices, method1=method1, method2=method2)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         # COMPUTE METRICS
-        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics4 = (rmse, rmse_p, psnr, snr, f1_score)
 
         method1 = lambda x: cae.smooth(x).numpy()
@@ -118,14 +118,14 @@ if __name__ == '__main__':
             x1, y, t, indices, method1=method1, method2=method2)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         # COMPUTE METRICS
-        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics5 = (rmse, rmse_p, psnr, snr, f1_score)
 
         y_pred, der_pred, idx = peak_detection(
             x2, y, t, indices, method1=method1, method2=method2)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         # COMPUTE METRICS
-        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y_pred, y, indices2)
+        rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics6 = (rmse, rmse_p, psnr, snr, f1_score)
 
         return [
