@@ -91,7 +91,7 @@ if __name__ == '__main__':
         param = (1000000000.0, 0.01, 3)
         method1a = g
         method1b = functools.partial(signal_processing.als_baseline_correction, lam=param[0], p=param[1], n_iter=param[2])
-        method1 = lambda x: method1a(method1b(x))
+        method1 = lambda x: method1b(method1a(x))
         method2 = functools.partial(deriv, n=2, w=15, m=1)
         y_pred, der_pred, idx = peak_detection(
             x2, y, t, indices, method1=method1, method2=method2)
@@ -103,7 +103,7 @@ if __name__ == '__main__':
         param = (12, 8)
         method1a = g
         method1b = functools.partial(signal_processing.polynomial_baseline_correction, order=param[0], n_iter=param[1])
-        method1 = lambda x: method1a(method1b(x))
+        method1 = lambda x: method1b(method1a(x))
         method2 = functools.partial(deriv, n=2, w=15, m=1)
         y_pred, der_pred, idx = peak_detection(
             x2, y, t, indices, method1=method1, method2=method2)
