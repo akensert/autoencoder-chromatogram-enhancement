@@ -97,7 +97,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--N', type=int, default=190_000)
-    parser.add_argument('--der_order', type=int, default=3)
+    parser.add_argument('--der_order', type=int, default=2)
     args = parser.parse_args()
 
     simulator = Simulator(

@@ -3,15 +3,20 @@ import multiprocessing
 import tqdm
 import numpy as np
 import itertools
+import pywt
 
 import signal_processing
 import metrics
 
-# savgol param     = (29, 2, 4)
-# gaussian param   = (21, 6, 1)
-# als param        = (1000000000.0, 0.01, 3)
-# polynomial param = (6, 4)
-
+# Best params obtained from running this script:
+# ----
+# savgol param         = (45, 4, 3)
+# gaussian param       = (13, 8, 1)
+# wavelet param (top5) = ('bior6.8', 3), ('coif3', 3), ('sym9', 3)
+# als param            = (1000000000.0, 0.0001, 3)
+# polynomial param     = (12, 8)
+# ---
+# These 'best params' are hardcoded in evaluate.py, to be run for evaluation
 
 def run(param, f, g):
     '''
@@ -72,6 +77,26 @@ with multiprocessing.Pool(12) as pool:
         )
     ], key=lambda x: x[1])[0][0]
 
+# WAVELET SMOOTHING HYPERPARAMETER SEARCH
+kind = pywt.wavelist(kind='discrete')
+level = [1, 2, 3, 4]
+grid = list(itertools.product(*(kind, level)))
+with multiprocessing.Pool(12) as pool:
+    wavelet_param = sorted([
+        e for e in tqdm.tqdm(
+            pool.imap(
+                functools.partial(
+                    run,
+                    f=signal_processing.wavelet_filter,
+                    g=None
+                ),
+                grid
+            ),
+            total=len(grid),
+            desc='wavelet parameter search'
+        )
+    ], key=lambda x: x[1])[:5]
+
 # ALS FITTING HYPERPARAMETER SEARCH
 lam = [1e6, 1e7, 1e8, 1e9]
 p = [1e-2, 1e-3, 1e-4]
@@ -123,7 +148,8 @@ with multiprocessing.Pool(12) as pool:
         )
     ], key=lambda x: x[1])[0][0]
 
-print('savgol_param     =', savgol_param)
-print('gaussian_param   =', gaussian_param)
-print('als_param        =', als_param)
-print('polynomial_param =', polynomial_param)
+print('savgol_param         =', savgol_param)
+print('gaussian_param       =', gaussian_param)
+print('wavelet_param (top5) =', wavelet_param)
+print('als_param            =', als_param)
+print('polynomial_param     =', polynomial_param)

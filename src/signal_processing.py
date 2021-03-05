@@ -1,8 +1,10 @@
 import numpy as np
 import math
+import pywt
 import scipy.signal
 import scipy.linalg
 import scipy.sparse
+
 
 
 def gaussian_filter(x, length, sigma, n_iter):
@@ -61,6 +63,16 @@ def polynomial_baseline_correction(x, order=3, n_iter=100):
         z = np.dot(vander, coeffs)
         base = np.minimum(base, z)
     return x - z
+
+def wavelet_filter(x, kind='sym9', level=3):
+    def madev(d, axis=None):
+        return np.mean(np.absolute(d - np.mean(d, axis)), axis)
+
+    coeff = pywt.wavedec(x, kind, mode="per")
+    sigma = (1/0.6745) * madev(coeff[-level])
+    uthresh = sigma * np.sqrt(2 * np.log(len(x)))
+    coeff[1:] = (pywt.threshold(i, value=uthresh, mode='hard') for i in coeff[1:])
+    return pywt.waverec(coeff, kind, mode='per')
 
 def apply_interpolation(x, y, target_size):
     '''

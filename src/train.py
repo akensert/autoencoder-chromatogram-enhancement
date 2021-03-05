@@ -171,11 +171,11 @@ if __name__ == '__main__':
     import os
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', type=bool, default=True)
+    parser.add_argument('--GPU', type=bool, default=True)
     parser.add_argument('--outpath', type=str, default='../output/model')
     args = parser.parse_args()
 
-    if args.gpu:
+    if args.GPU:
         gpus = tf.config.experimental.list_physical_devices('GPU')
         num_gpus = len(gpus)
         if gpus:
@@ -197,41 +197,41 @@ if __name__ == '__main__':
 
     generator = Generator(
         path=train_path,
-        batch_size=32)
-
+        batch_size=32
+    )
     cae = CAE(
         layer_sizes=layer_sizes,
         kernel_sizes=kernel_sizes,
         stride_size=2,
         input_shape=(8192, 1)
-        )
+    )
     callback = tf.keras.callbacks.LearningRateScheduler(
-        schedule=lambda epoch, lr: lr * 0.5 if epoch > 0 else lr, verbose=1
+        schedule=lambda epoch, lr: lr * 0.8 if epoch > 0 else lr, verbose=1
     )
 
     cae.compile(optimizer=tf.keras.optimizers.Adam(1e-3), loss='MSE')
-    # cae.fit(
-    #     generator,
-    #     epochs=8,
-    #     callbacks=[callback],
-    #     use_multiprocessing=True,
-    #     workers=4,
-    #     verbose=1
-    # )
-    #
-    # tf.saved_model.save(cae, export_dir=args.outpath)
-    # print("model saved to {}".format(args.outpath))
+    cae.fit(
+        generator,
+        epochs=10,
+        callbacks=[callback],
+        use_multiprocessing=True,
+        workers=4,
+        verbose=1
+    )
 
-    #DEBUG
-    for _ in range(12):
-        cae.fit(
-            generator,
-            epochs=1,
-            # use_multiprocessing=True,
-            # workers=4,
-            verbose=1
-        )
-        cae.optimizer.lr = cae.optimizer.lr * 0.8
-        tf.saved_model.save(cae, export_dir=args.outpath+f'{_}')
-        os.system('python evaluate.py --T=white --N=500 --inpath={}'.format(args.outpath+f'{_}'))
-        print("model saved to {}".format(args.outpath))
+    tf.saved_model.save(cae, export_dir=args.outpath)
+    print("model saved to {}".format(args.outpath))
+
+    # #DEBUG
+    # for i in range(12):
+    #     cae.fit(
+    #         generator,
+    #         epochs=1,
+    #         # use_multiprocessing=True,
+    #         # workers=4,
+    #         verbose=1
+    #     )
+    #     cae.optimizer.lr = cae.optimizer.lr * 0.8
+    #     tf.saved_model.save(cae, export_dir=args.outpath+f'{i}')
+    #     os.system('python evaluate.py --T=white --N=500 --inpath={}'.format(args.outpath+f'{i}'))
+    #     print("model saved to {}".format(args.outpath))
