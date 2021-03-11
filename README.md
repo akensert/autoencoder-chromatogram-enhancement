@@ -31,9 +31,9 @@ Feel free to include your own csv file, though a few chromatograms are supplied 
 *Procedure (script):*<br>
 1. Reads the chromatogram from a csv file given the path (notice, the csv should contain two columns (comma separated, no header): column 1 being be the time and column 2 being the strength of the signal (e.g. mAU))
 2. Lets the trained autoencoder denoise it
-3. Writes the denoised chromatogram to a new csv file (same path as the input but with the extension `.smooth.csv`)
-<br><br>
-*Limitations:*<br>
+3. Writes the denoised chromatogram to a new csv file (same path as the input but with the extension `.smooth.csv`).
+
+<br>*Limitations:*<br>
 
 1. The autoencoder was trained on peak heights of 25-250, thus if the average peak height of your chromatogram is <50 or >500, the results of the denoising might be bad. To resolve this, multiply each element of the signal column by some constant (e.g. if the average peak height is ~10, multiply the entire signal by ~30).
 2. Similarily, as the autoencoder was trained on chromatograms with certain ranges of values of SNR, peak width, number of peaks, etc., the results of the denoising might be bad if your chromatogram is outside those ranges (see `generate_dataset.py` for more information on these ranges of values)
