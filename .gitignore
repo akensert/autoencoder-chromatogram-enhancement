@@ -20,6 +20,7 @@ output/[A-Za-z]*
 notebooks/
 src/output.txt
 src/run.sh
+!output/model
 
 # jupyter
 MANIFEST
