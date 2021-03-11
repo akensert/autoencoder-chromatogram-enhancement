@@ -8,16 +8,15 @@ import signal_processing
 import metrics
 
 
-def peak_detection(x, y, t, peak_regions, method1, method2, filter_length=9, height=1, distance=30):
-    smooth = scipy.signal.savgol_filter
+def peak_detection(x, y, t, peak_regions, method1, method2, filter_length=9, height=1, distance=30, der_numerical=False):
     y_pred = method1(x)
-    if hasattr(method1, '__name__'):
-        der_pred = method2(x)
-    else:
+    if der_numerical:
         der_pred = method2(y_pred)
+    else:
+        der_pred = method2(x)
 
     idx = scipy.signal.find_peaks(
-        -smooth(der_pred[peak_regions], filter_length, 2),
+        -der_pred[peak_regions],
         height=height,
         distance=distance)[0]
     return y_pred, der_pred, idx
@@ -35,13 +34,12 @@ def extract_peak_regions(t, loc, scale, dev):
         peak_regions.extend(idx)
     return list(set(peak_regions))
 
-def deriv(x, n, w, m):
-    for i in range(n):
-        if i != 0:
-            x = np.gradient(scipy.signal.savgol_filter(x, w, 2))*10*m
-        else:
-            x = np.gradient(x)*10*m
-    return x
+def deriv(x, n, w, m, mode='num'):
+    if mode == 'num':
+        for i in range(n):
+            x = np.gradient(x)*10**m
+        return x
+    return scipy.signal.savgol_filter(x, w, 2, deriv=n)*10**m
 
 if __name__ == '__main__':
     import argparse
@@ -50,7 +48,7 @@ if __name__ == '__main__':
     tf.config.set_visible_devices([], 'GPU')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--N', type=int, default=100)
+    parser.add_argument('--N', type=int, default=10_000)
     parser.add_argument('--inpath', type=str, default='../output/model')
     parser.add_argument('--T', type=str, default='white')
 
@@ -67,9 +65,9 @@ if __name__ == '__main__':
         # SAVITZKY-GOLAY
         param = (45, 4, 3)
         method1 = functools.partial(signal_processing.savgol_filter, length=param[0], order=param[1], n_iter=param[2])
-        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        method2 = functools.partial(deriv, n=2, w=21, m=1, mode='savgol')
         y_pred, der_pred, idx = peak_detection(
-            x1, y, t, indices, method1=method1, method2=method2)
+            x1, y, t, indices, method1=method1, method2=method2, der_numerical=False)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics1 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -81,9 +79,9 @@ if __name__ == '__main__':
         # GAUSSIAN SMOOTHING
         param = (13, 8, 1)
         method1 = functools.partial(signal_processing.gaussian_filter, length=param[0], sigma=param[1], n_iter=param[2])
-        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        method2 = functools.partial(deriv, n=2, w=21, m=1)
         y_pred, der_pred, idx = peak_detection(
-            x1, y, t, indices, method1=method1, method2=method2)
+            x1, y, t, indices, method1=method1, method2=method2, der_numerical=True)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics2 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -93,7 +91,7 @@ if __name__ == '__main__':
         method1 = functools.partial(signal_processing.wavelet_filter, kind=param[0], level=param[1])
         method2 = functools.partial(deriv, n=2, w=15, m=1)
         y_pred, der_pred, idx = peak_detection(
-            x1, y, t, indices, method1=method1, method2=method2)
+            x1, y, t, indices, method1=method1, method2=method2, der_numerical=True)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics3 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -103,7 +101,7 @@ if __name__ == '__main__':
         method1 = functools.partial(signal_processing.wavelet_filter, kind=param[0], level=param[1])
         method2 = functools.partial(deriv, n=2, w=15, m=1)
         y_pred, der_pred, idx = peak_detection(
-            x1, y, t, indices, method1=method1, method2=method2)
+            x1, y, t, indices, method1=method1, method2=method2, der_numerical=True)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics4 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -113,7 +111,7 @@ if __name__ == '__main__':
         method1 = functools.partial(signal_processing.wavelet_filter, kind=param[0], level=param[1])
         method2 = functools.partial(deriv, n=2, w=15, m=1)
         y_pred, der_pred, idx = peak_detection(
-            x1, y, t, indices, method1=method1, method2=method2)
+            x1, y, t, indices, method1=method1, method2=method2, der_numerical=True)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics5 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -123,9 +121,9 @@ if __name__ == '__main__':
         method1a = g
         method1b = functools.partial(signal_processing.als_baseline_correction, lam=param[0], p=param[1], n_iter=param[2])
         method1 = lambda x: method1b(method1a(x))
-        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        method2 = functools.partial(deriv, n=2, w=21, m=1, mode='savgol')
         y_pred, der_pred, idx = peak_detection(
-            x2, y, t, indices, method1=method1, method2=method2)
+            x2, y, t, indices, method1=method1, method2=method2, der_numerical=False)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics6 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -135,9 +133,9 @@ if __name__ == '__main__':
         method1a = g
         method1b = functools.partial(signal_processing.polynomial_baseline_correction, order=param[0], n_iter=param[1])
         method1 = lambda x: method1b(method1a(x))
-        method2 = functools.partial(deriv, n=2, w=15, m=1)
+        method2 = functools.partial(deriv, n=2, w=21, m=1, mode='savgol')
         y_pred, der_pred, idx = peak_detection(
-            x2, y, t, indices, method1=method1, method2=method2)
+            x2, y, t, indices, method1=method1, method2=method2, der_numerical=False)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics7 = (rmse, rmse_p, psnr, snr, f1_score)
@@ -146,13 +144,13 @@ if __name__ == '__main__':
         method1 = lambda x: cae.smooth(x).numpy()
         method2 = lambda x: cae.smooth_der(x).numpy()
         y_pred, der_pred, idx = peak_detection(
-            x1, y, t, indices, method1=method1, method2=method2)
+            x1, y, t, indices, method1=method1, method2=method2, der_numerical=False)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics8 = (rmse, rmse_p, psnr, snr, f1_score)
 
         y_pred, der_pred, idx = peak_detection(
-            x2, y, t, indices, method1=method1, method2=method2)
+            x2, y, t, indices, method1=method1, method2=method2, der_numerical=False)
         f1_score, matches = metrics.compute_f1_score(t[indices], loc, scale, idx)
         rmse, rmse_p, psnr, snr = metrics.compute_metrics(y, y_pred, indices2)
         metrics9 = (rmse, rmse_p, psnr, snr, f1_score)
