@@ -7,4 +7,8 @@ scipy==1.4.1
 numpy==1.18.0
 tqdm
 tensorflow==2.4.0
+<<<<<<< HEAD
 tensorboard==2.4.0
+=======
+tensorboard==2.3.0
+>>>>>>> ffaea6c256646e684ee0515694641b778e199b1c
