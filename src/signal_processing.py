@@ -6,7 +6,6 @@ import scipy.linalg
 import scipy.sparse
 
 
-
 def gaussian_filter(x, length, sigma, n_iter):
     n = np.arange(0, length) - (length - 1.0) / 2
     f = np.exp(-1/2 * (n / sigma)**2)
